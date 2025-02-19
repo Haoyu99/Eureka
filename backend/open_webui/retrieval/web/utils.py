@@ -96,6 +96,7 @@ class SafeWebBaseLoader(WebBaseLoader):
 
                     if self.use_proxy:
                         # 使用代理
+                        # TODO jina 访问不了uc 用webpolit
                         proxy_url = f"https://r.jina.ai/{url}"
                         async with session.get(proxy_url, **(self.requests_kwargs | kwargs)) as response:
                             if self.raise_for_status:
