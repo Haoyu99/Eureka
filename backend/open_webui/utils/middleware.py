@@ -76,7 +76,7 @@ from open_webui.utils.filter import (
     get_sorted_filter_ids,
     process_filter_functions,
 )
-from open_webui.utils.code_interpreter import execute_code_jupyter
+from open_webui.utils.code_interpreter import execute_code_jupyter, upload_file_jupyter
 
 from open_webui.tasks import create_task
 
@@ -702,6 +702,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
         files = form_data.get("files", [])
         files.extend(knowledge_files)
+        # 可以从file中获取到文件的路径
         form_data["files"] = files
 
     variables = form_data.pop("variables", None)
@@ -742,7 +743,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 request, form_data, extra_params, user
             )
 
+         # 在这里开始进行代码解释 只是增加了一段 prompt 放到特殊的UI框中
         if "code_interpreter" in features and features["code_interpreter"]:
+            # 这里是否可以增加上传文件的操作？ 把文件从『』复制到『』 通过API传到某个目录中
             form_data["messages"] = add_or_update_user_message(
                 (
                     request.app.state.config.CODE_INTERPRETER_PROMPT_TEMPLATE
@@ -758,6 +761,32 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # Remove files duplicates
     if files:
         files = list({json.dumps(f, sort_keys=True): f for f in files}.values())
+
+    local_file_path = '/home/zhanghaoyu7/webProject/open-webui/backend/data/uploads/7795351b-c414-4fb7-9c2b-9bfe45fed879_OpenAI是如何实现函数调用的GPTs.md'
+    remote_path = '/work'
+    success = await upload_file_jupyter(
+        request.app.state.config.CODE_INTERPRETER_JUPYTER_URL,
+        local_file_path,  # 本地文件路径
+        remote_path,  # 远程目标路径（可选）
+        (
+            request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH_TOKEN
+            if request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH == "token"
+            else None
+        ),
+        (
+            request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD
+            if request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH == "password"
+            else None
+        )
+    )
+
+    if success:
+        # 文件上传成功处理
+        log.info(f"File {local_file_path} successfully uploaded to {remote_path}")
+    else:
+        # 文件上传失败处理
+        log.error(f"Failed to upload file {local_file_path}")
+
 
     metadata = {
         **metadata,
@@ -974,7 +1003,7 @@ async def process_chat_response(
                             )
                         except Exception as e:
                             pass
-
+    # 方法开始
     event_emitter = None
     event_caller = None
     if (
@@ -1024,7 +1053,7 @@ async def process_chat_response(
                             },
                         }
                     )
-
+                    # 存入数据库
                     # Save message in the database
                     Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata["chat_id"],
@@ -1033,7 +1062,7 @@ async def process_chat_response(
                             "content": content,
                         },
                     )
-
+                    # 发送webhook通知
                     # Send a webhook notification if the user is not active
                     if get_active_status_by_user_id(user.id) is None:
                         webhook_url = Users.get_user_webhook_url_by_id(user.id)
@@ -1076,6 +1105,7 @@ async def process_chat_response(
         "__request__": request,
         "__model__": model,
     }
+    # 获取filter
     filter_functions = [
         Functions.get_function_by_id(filter_id)
         for filter_id in get_sorted_filter_ids(model)
@@ -1170,7 +1200,7 @@ async def process_chat_response(
                                 content = f'{content}\n<{block["start_tag"]}>{block["content"]}<{block["end_tag"]}>\n'
                             else:
                                 content = f'{content}\n<details type="reasoning" done="false">\n<summary>Thinking…</summary>\n{reasoning_display_content}\n</details>\n'
-
+                    # 这里处理代码解释器的逻辑
                     elif block["type"] == "code_interpreter":
                         attributes = block.get("attributes", {})
                         output = block.get("output", None)
@@ -1426,6 +1456,7 @@ async def process_chat_response(
             # We might want to disable this by default
             DETECT_REASONING = True
             DETECT_SOLUTION = True
+            # code_interpreter 相关
             DETECT_CODE_INTERPRETER = metadata.get("features", {}).get(
                 "code_interpreter", False
             )
@@ -1988,6 +2019,7 @@ async def process_chat_response(
                         )
 
                         try:
+                            # 中间工具执行完成后再次调用对话接口
                             res = await generate_chat_completion(
                                 request,
                                 {
@@ -2073,6 +2105,7 @@ async def process_chat_response(
                 await response.background()
 
         # background_tasks.add_task(post_response_handler, response, events)
+        # 开启后台任务
         task_id, _ = create_task(post_response_handler(response, events))
         return {"status": True, "task_id": task_id}
 
