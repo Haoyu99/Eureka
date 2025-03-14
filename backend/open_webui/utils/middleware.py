@@ -83,7 +83,7 @@ from open_webui.tasks import create_task
 from open_webui.config import (
     CACHE_DIR,
     DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
-    DEFAULT_CODE_INTERPRETER_PROMPT,
+    DEFAULT_CODE_INTERPRETER_PROMPT, file_path,
 )
 from open_webui.env import (
     SRC_LOG_LEVELS,
@@ -708,6 +708,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     variables = form_data.pop("variables", None)
 
     # Process the form_data through the pipeline
+    # TODO: 未来可以通过pipeline的方式实现上传文件
     try:
         form_data = await process_pipeline_inlet_filter(
             request, form_data, user, models
@@ -731,6 +732,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     except Exception as e:
         raise Exception(f"Error: {e}")
 
+    # 先对文件进行处理
+    files = form_data.pop("files", None)
+
+    # Remove files duplicates
+    if files:
+        files = list({json.dumps(f, sort_keys=True): f for f in files}.values())
+
     features = form_data.pop("features", None)
     if features:
         if "web_search" in features and features["web_search"]:
@@ -743,9 +751,12 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 request, form_data, extra_params, user
             )
 
-         # 在这里开始进行代码解释 只是增加了一段 prompt 放到特殊的UI框中
+        # 在这里开始进行代码解释 只是增加了一段 prompt 放到特殊的UI框中
         if "code_interpreter" in features and features["code_interpreter"]:
-            # 这里是否可以增加上传文件的操作？ 把文件从『』复制到『』 通过API传到某个目录中
+            # TODO： 应该在这里处理文件， 先上传，上传成功后有一个list 写入prompt
+            file_paths = []
+
+            # TODO： 要获取一个文件list 写入prompt中
             form_data["messages"] = add_or_update_user_message(
                 (
                     request.app.state.config.CODE_INTERPRETER_PROMPT_TEMPLATE
@@ -754,14 +765,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 ),
                 form_data["messages"],
             )
+            #TODO： 应该在这里处理文件
 
-    tool_ids = form_data.pop("tool_ids", None)
-    files = form_data.pop("files", None)
-
-    # Remove files duplicates
-    if files:
-        files = list({json.dumps(f, sort_keys=True): f for f in files}.values())
-
+    # 开始上传文件
     local_file_path = '/home/zhanghaoyu7/webProject/open-webui/backend/data/uploads/7795351b-c414-4fb7-9c2b-9bfe45fed879_OpenAI是如何实现函数调用的GPTs.md'
     remote_path = '/work'
     success = await upload_file_jupyter(
@@ -787,6 +793,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         # 文件上传失败处理
         log.error(f"Failed to upload file {local_file_path}")
 
+    tool_ids = form_data.pop("tool_ids", None)
 
     metadata = {
         **metadata,
