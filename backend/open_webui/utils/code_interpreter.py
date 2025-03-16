@@ -201,13 +201,14 @@ class JupyterCodeExecuter:
         self.result.result = "\n".join(result).strip() if result else ""
 
     async def upload_file(
-            self, local_file_path: str, remote_path: str = ""
+            self, local_file_path: str, remote_path: str = "", filename: str = ""
     ) -> bool:
         """
         Upload a file to the Jupyter server
 
         :param local_file_path: Path to the local file to upload
         :param remote_path: Remote directory path (default: server root)
+        :param filename: Filename to upload
         :return: Boolean indicating success
         """
         try:
@@ -219,9 +220,7 @@ class JupyterCodeExecuter:
                 file_content = file.read()
 
             # Get filename from path
-            import os
-            filename = os.path.basename(local_file_path)
-            # TODO:这里可以对fileName进行修改 直获取_后的内容
+
             # Create API endpoint URL (with or without directory)
             endpoint = f"/api/contents/{remote_path}/{filename}" if remote_path else f"/api/contents/{filename}"
 
@@ -257,6 +256,7 @@ async def upload_file_jupyter(
         base_url: str,
         local_file_path: str,
         remote_path: str = "",
+        file_name: str = "",
         token: str = "",
         password: str = ""
 ) -> bool:
@@ -266,6 +266,7 @@ async def upload_file_jupyter(
     :param base_url: Jupyter server URL (e.g., "http://localhost:8888")
     :param local_file_path: Path to the local file to upload
     :param remote_path: Remote directory path (default: server root)
+    :param file_name: File name (default: "")
     :param token: Jupyter authentication token (optional)
     :param password: Jupyter password (optional)
     :return: Boolean indicating success
@@ -277,7 +278,7 @@ async def upload_file_jupyter(
             # 先完成登录认证
             await executor.sign_in()
             # 再执行文件上传
-            return await executor.upload_file(local_file_path, remote_path)
+            return await executor.upload_file(local_file_path, remote_path, file_name)
         except Exception as err:
             logger.exception(f"File upload process failed: {err}")
             return False

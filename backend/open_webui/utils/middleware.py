@@ -622,6 +622,37 @@ def apply_params_to_form_data(form_data, model):
     return form_data
 
 
+def get_file_info_list(files):
+    """
+    Extract a list of file information from the files data structure.
+
+    Parameters:
+        files: List of file data structures
+
+    Returns:
+        A list containing file information, each item including file_path, original name, and upload name
+    """
+    if not files:
+        return []
+
+    file_info_list = []
+    for f in files:
+        if f.get('type') == 'file':
+            file_id = f.get('id')
+            upload_name = f.get('name')  # Upload name
+            if file_id and upload_name:
+                # Construct file path
+                file_path = f"data/uploads/{file_id}_{upload_name}"
+                # Original name
+                original_name = f"{file_id}_{upload_name}"
+                file_info_list.append({
+                    'file_path': file_path,  # Full file path
+                    'original_name': original_name,  # Original name (with ID)
+                    'upload_name': upload_name  # Upload name
+                })
+    return file_info_list
+
+
 async def process_chat_payload(request, form_data, user, metadata, model):
 
     form_data = apply_params_to_form_data(form_data, model)
@@ -753,10 +784,40 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
         # 在这里开始进行代码解释 只是增加了一段 prompt 放到特殊的UI框中
         if "code_interpreter" in features and features["code_interpreter"]:
-            # TODO： 应该在这里处理文件， 先上传，上传成功后有一个list 写入prompt
-            file_paths = []
 
-            # TODO： 要获取一个文件list 写入prompt中
+            # Start uploading files
+            upload_files = get_file_info_list(files)
+            successful_uploads = []
+            # default root path
+            remote_path = '/'
+            for file_info in upload_files:
+                local_file_path = file_info['file_path']
+                file_name = file_info['upload_name']
+                try:
+                    success = await upload_file_jupyter(
+                        request.app.state.config.CODE_INTERPRETER_JUPYTER_URL,
+                        local_file_path,  # Local file path
+                        remote_path,  # Remote target path (optional)
+                        file_name,
+                        (
+                            request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH_TOKEN
+                            if request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH == "token"
+                            else None
+                        ),
+                        (
+                            request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD
+                            if request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH == "password"
+                            else None
+                        )
+                    )
+                    if success:
+                        successful_uploads.append(file_name)
+                        log.info(f"File {local_file_path} successfully uploaded to {remote_path}")
+                    else:
+                        log.error(f"Failed to upload file {local_file_path}")
+                except Exception as e:
+                    log.error(f"Error uploading file {file_name}: {str(e)}")
+
             form_data["messages"] = add_or_update_user_message(
                 (
                     request.app.state.config.CODE_INTERPRETER_PROMPT_TEMPLATE
@@ -765,33 +826,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 ),
                 form_data["messages"],
             )
-            #TODO： 应该在这里处理文件
+            # 在原来prompt基础上增加文件列表
+            file_list_str  = "**Available Files:**" + str(successful_uploads)
+            form_data["messages"] = add_or_update_user_message(file_list_str ,
+                form_data["messages"],
+            )
 
-    # 开始上传文件
-    local_file_path = '/home/zhanghaoyu7/webProject/open-webui/backend/data/uploads/7795351b-c414-4fb7-9c2b-9bfe45fed879_OpenAI是如何实现函数调用的GPTs.md'
-    remote_path = '/work'
-    success = await upload_file_jupyter(
-        request.app.state.config.CODE_INTERPRETER_JUPYTER_URL,
-        local_file_path,  # 本地文件路径
-        remote_path,  # 远程目标路径（可选）
-        (
-            request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH_TOKEN
-            if request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH == "token"
-            else None
-        ),
-        (
-            request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD
-            if request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH == "password"
-            else None
-        )
-    )
 
-    if success:
-        # 文件上传成功处理
-        log.info(f"File {local_file_path} successfully uploaded to {remote_path}")
-    else:
-        # 文件上传失败处理
-        log.error(f"Failed to upload file {local_file_path}")
 
     tool_ids = form_data.pop("tool_ids", None)
 
