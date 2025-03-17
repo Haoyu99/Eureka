@@ -763,13 +763,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     except Exception as e:
         raise Exception(f"Error: {e}")
 
-    # 先对文件进行处理
     files = form_data.pop("files", None)
 
     # Remove files duplicates
     if files:
         files = list({json.dumps(f, sort_keys=True): f for f in files}.values())
 
+    is_code_interpreter_enabled = False
     features = form_data.pop("features", None)
     if features:
         if "web_search" in features and features["web_search"]:
@@ -782,10 +782,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 request, form_data, extra_params, user
             )
 
-        # 在这里开始进行代码解释 只是增加了一段 prompt 放到特殊的UI框中
         if "code_interpreter" in features and features["code_interpreter"]:
 
             # Start uploading files
+            is_code_interpreter_enabled = True
             upload_files = get_file_info_list(files)
             successful_uploads = []
             # default root path
@@ -879,11 +879,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             except Exception as e:
                 log.exception(e)
 
-    try:
-        form_data, flags = await chat_completion_files_handler(request, form_data, user)
-        sources.extend(flags.get("sources", []))
-    except Exception as e:
-        log.exception(e)
+    # 如果代码解释器开启 则跳过文件检索的过程：
+    if not is_code_interpreter_enabled :
+        try:
+            form_data, flags = await chat_completion_files_handler(request, form_data, user)
+            sources.extend(flags.get("sources", []))
+        except Exception as e:
+            log.exception(e)
 
     # If context is not empty, insert it into the messages
     if len(sources) > 0:
