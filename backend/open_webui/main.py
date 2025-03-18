@@ -1039,7 +1039,7 @@ async def chat_completion(
 
         request.state.metadata = metadata
         form_data["metadata"] = metadata
-
+        # 前置处理
         form_data, metadata, events = await process_chat_payload(
             request, form_data, user, metadata, model
         )

@@ -1542,9 +1542,9 @@ async def process_chat_response(
                             **event,
                         },
                     )
-
+                # 再次处理返回的流
                 async def stream_body_handler(response):
-                    nonlocal content
+                    content = ""
                     nonlocal content_blocks
 
                     response_tool_calls = []
@@ -2080,10 +2080,12 @@ async def process_chat_response(
                                         *form_data["messages"],
                                         {
                                             "role": "assistant",
-                                            "content": serialize_content_blocks(
-                                                content_blocks, raw=True
-                                            ),
+                                            "content": serialize_content_blocks(content_blocks, raw=True),
                                         },
+                                        {
+                                            "role": "user",
+                                            "content": "Based on the analysis provided above, please continue with further analysis if needed. If the analysis is complete, no additional analysis is required. If there are any images in the analysis results, please explain those images first and provide their markdown format links (e.g., ![description](image_url))."
+                                        }
                                     ],
                                 },
                                 user,
