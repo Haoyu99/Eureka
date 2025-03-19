@@ -2084,7 +2084,11 @@ async def process_chat_response(
                                         },
                                         {
                                             "role": "user",
-                                            "content": "Based on the analysis provided above, please continue with further analysis if needed. If the analysis is complete, no additional analysis is required. If there are any images in the analysis results, please explain those images first and provide their markdown format links (e.g., ![description](image_url))."
+                                            "content": "Based on the analysis provided above, please continue with further analysis if needed. If the analysis is complete, "
+                                                       "no additional analysis is required. If there are any images in the analysis results, "
+                                                       "please explain those images first and provide their markdown format links (e.g., ![description](image_url))."
+                                                       "Please respond in the same language as the question was asked. For any code-generated visualizations, ensure all "
+                                                       "chart legends, labels, and titles are in English regardless of the response language."
                                         }
                                     ],
                                 },
