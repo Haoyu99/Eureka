@@ -2514,8 +2514,6 @@ async def process_chat_response(
                 await response.background()
 
         # background_tasks.add_task(post_response_handler, response, events)
-        # 开启后台任务
-        task_id, _ = create_task(post_response_handler(response, events))
         task_id, _ = await create_task(
             request, post_response_handler(response, events), id=metadata["chat_id"]
         )
